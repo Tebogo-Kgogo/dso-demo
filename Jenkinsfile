@@ -133,3 +133,11 @@ pipeline {
 
   }
 }
+    stage('Deploy to Dev') {
+      steps {
+        sh 'echo done'
+      }
+    }
+
+  }  // closes stages
+}    // closes pipeline
