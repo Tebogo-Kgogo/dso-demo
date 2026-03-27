@@ -2,69 +2,46 @@ pipeline {
     agent {
         kubernetes {
             yamlFile 'build-agent.yaml'
-            defaultContainer 'maven'
-            idleMinutes 1
         }
+    }
+
+    environment {
+        IMAGE_NAME = "docker.io/xxxxxx/dso-demo"
+        DOCKERFILE_PATH = "${WORKSPACE}/Dockerfile"
+        CONTEXT_DIR = "${WORKSPACE}"
     }
 
     stages {
 
-        stage('Build') {
-            parallel {
-                stage('Compile') {
-                    steps {
-                        container('maven') {
-                            sh 'mvn compile'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Test') {
-            parallel {
-                stage('Unit Tests') {
-                    steps {
-                        container('maven') {
-                            sh 'mvn test'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Package') {
-            parallel {
-                stage('Create Jarfile') {
-                    steps {
-                        container('maven') {
-                            sh 'mvn package -DskipTests'
-                        }
-                    }
-                }
-
-                stage('Docker BnP') {
-                    steps {
-                        container('kaniko') {
-                            sh '''
-                            /kaniko/executor \
-                              -f $(pwd)/Dockerfile \
-                              -c $(pwd) \
-                              --insecure \
-                              --skip-tls-verify \
-                              --cache=true \
-                              --destination=docker.io/xxxxxx/dso-demo
-                            '''
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Dev') {
+        stage('Build with Maven') {
             steps {
-                sh 'echo done'
+                container('maven') {
+                    sh 'mvn clean install'
+                }
             }
         }
+
+        stage('Build Docker Image with Kaniko') {
+            steps {
+                container('kaniko') {
+                    sh """
+                    /kaniko/executor \\
+                        -f ${DOCKERFILE_PATH} \\
+                        -c ${CONTEXT_DIR} \\
+                        --insecure \\
+                        --skip-tls-verify \\
+                        --cache=true \\
+                        --destination=${IMAGE_NAME}
+                    """
+                }
+            }
+        }
+
+        stage('Post-build cleanup') {
+            steps {
+                echo "Build complete. Image pushed to ${IMAGE_NAME}"
+            }
+        }
+
     }
 }
