@@ -1,42 +1,43 @@
 pipeline {
     agent {
         kubernetes {
-            yamlFile 'build-agent.yaml'
-            defaultContainer 'maven'
+            yamlFile 'build-agent.yaml'  // your pod template file
         }
     }
+
     environment {
-        DOCKER_REGISTRY = 'docker.io/xxxxxx'
-        IMAGE_NAME = 'dso-demo'
-        NVD_API_KEY = '<YOUR_NVD_API_KEY>'  // Inject your NVD API key here
+        NVD_API_KEY = credentials('nvd-api-key') // store your NVD API key in Jenkins credentials
     }
+
     stages {
         stage('Build') {
             steps {
                 container('maven') {
-                    sh 'mvn clean package'
+                    sh 'mvn clean install -B'
                 }
             }
         }
+
         stage('Dependency Check') {
             steps {
                 container('maven') {
-                    sh 'mvn org.owasp:dependency-check-maven:6.1.1:check'
+                    sh '''
+                        mvn org.owasp:dependency-check-maven:6.1.1:check \
+                            -Dnvd.apiKey=$NVD_API_KEY
+                    '''
                 }
             }
         }
+
         stage('Build Docker Image') {
             steps {
                 container('kaniko') {
                     sh '''
-                    /kaniko/executor \
-                        -f $WORKSPACE/Dockerfile \
-                        -c $WORKSPACE \
-                        --insecure \
-                        --skip-tls-verify \
-                        --cache=true \
-                        --destination=$DOCKER_REGISTRY/$IMAGE_NAME \
-                        --force
+                        /kaniko/executor \
+                        -f /home/jenkins/agent/workspace/${JOB_NAME}/Dockerfile \
+                        -c /home/jenkins/agent/workspace/${JOB_NAME} \
+                        --destination=docker.io/xxxxxx/dso-demo \
+                        --cache=true
                     '''
                 }
             }
